@@ -7,6 +7,7 @@ let filteredProducts = [];
 let isEditing = false;
 let editingProductCode = null;
 let deletingProductCode = null;
+let deletingProductId = null;
 
 // DOM Elements
 const searchInput = document.getElementById('searchInput');
@@ -186,23 +187,37 @@ async function handleAddProduct(e) {
         let response;
         if (isEditing) {
             // For edit, prepare JSON data
-            const sizeValue = formData.get('size');
-            const size = sizeValue ? sizeValue.split(',').map(s => s.trim()).filter(s => s.length > 0) : [];
+            const title = addProductForm.elements['title'].value;
+            const code = addProductForm.elements['code'].value;
+            const category = addProductForm.elements['category'].value;
+            const status = addProductForm.elements['status'].value;
+            const color = addProductForm.elements['color'].value;
+            const price = addProductForm.elements['price'].value;
+            const purchase_price = addProductForm.elements['purchase_price'].value;
+            const stock = addProductForm.elements['stock'].value;
+            const size = addProductForm.elements['size'].value;
+            const sold_price = addProductForm.elements['sold_price'].value || 0;
+            const sold_date = addProductForm.elements['sold_date'].value || '';
+
+            const sizeArray = size ? size.split(',').map(s => s.trim()).filter(s => s.length > 0) : [];
 
             const productData = {
-                title: formData.get('title'),
-                category: formData.get('category'),
-                price: parseInt(formData.get('price')),
-                code: formData.get('code'),
-                status: formData.get('status'),
-                color: formData.get('color'),
-                stock: parseInt(formData.get('stock')),
-                size: size,
-                purchase_price: parseInt(formData.get('purchase_price')),
-                sold_price: parseInt(formData.get('sold_price')) || 0,
-                sold_date: formData.get('sold_date') || '',
-                image: allProducts.find(p => p.code === editingProductCode)?.image // Keep existing image
+                title: title,
+                category: category,
+                price: parseInt(price),
+                code: code,  // Note: we don't want to change the code during editing, so this will be ignored by the server
+                status: status,
+                color: color,
+                stock: parseInt(stock),
+                size: sizeArray,
+                purchase_price: parseInt(purchase_price),
+                sold_price: parseInt(sold_price),
+                sold_date: sold_date
+                // image is handled by the server to preserve existing image if no new image is provided
             };
+
+            console.log("Sending PATCH request with data:", productData); // Debug log
+            console.log("Editing product with code:", editingProductCode); // Debug log
 
             response = await fetch(`${API_URL}/${editingProductCode}`, {
                 method: 'PATCH',
@@ -252,8 +267,10 @@ function handleDelete(productCode) {
     const productName = product ? product.title : 'Mahsulot';
 
     // Set the confirmation text
-    deleteConfirmText.innerHTML = `Siz rostdan ham "${productName}" (kod: ${productCode}) mahsulotini o'chirishni istaysizmi?<br><br>Bu amalni ortga qaytarib bo'lmaydi.`;
+    const displayCode = productCode || (product ? product.id : 'Noma\'lum');
+    deleteConfirmText.innerHTML = `Siz rostdan ham "${productName}" (kod: ${displayCode}) mahsulotini o'chirishni istaysizmi?<br><br>Bu amalni ortga qaytarib bo'lmaydi.`;
     deletingProductCode = productCode;
+    deletingProductId = product ? product.id : null;
 
     // Show modal
     deleteConfirmModal.classList.remove('hidden');
@@ -262,15 +279,39 @@ function handleDelete(productCode) {
 
 // Confirm Delete
 async function confirmDelete() {
-    if (!deletingProductCode) return;
+    if (!deletingProductCode && !deletingProductId) {
+        console.error('No product code or ID set for deletion');
+        showError('Mahsulot o\'chirishda xatolik yuz berdi');
+        closeDeleteConfirmModal();
+        return;
+    }
+
+    console.log("Attempting to delete product with code:", deletingProductCode); // Debug log
 
     try {
-        const response = await fetch(`${API_URL}/${deletingProductCode}`, {
+        // Use code if available, otherwise fall back to ID
+        let deleteUrl;
+        if (deletingProductCode) {
+            deleteUrl = `${API_URL}/${deletingProductCode}`;
+        } else {
+            // Find product by ID as fallback
+            const product = allProducts.find(p => p.id === deletingProductId);
+            if (product) {
+                deleteUrl = `${API_URL}/id/${product.id}`;
+            } else {
+                throw new Error('Mahsulot topilmadi');
+            }
+        }
+
+        const response = await fetch(deleteUrl, {
             method: 'DELETE'
         });
 
+        console.log("Delete response status:", response.status); // Debug log
+
         if (!response.ok) {
             const error = await response.json();
+            console.error('Delete request failed:', error); // Debug log
             throw new Error(error.error || 'Failed to delete product');
         }
 
@@ -280,6 +321,7 @@ async function confirmDelete() {
     } catch (error) {
         console.error('Error deleting product:', error);
         showError(error.message || 'Mahsulot o\'chirishda xatolik yuz berdi');
+        closeDeleteConfirmModal(); // Ensure modal is closed even on error
     }
 }
 
@@ -288,6 +330,7 @@ function closeDeleteConfirmModal() {
     deleteConfirmModal.classList.add('hidden');
     document.body.style.overflow = 'auto';
     deletingProductCode = null;
+    deletingProductId = null;
 }
 
 // Handle Edit Product
@@ -448,13 +491,25 @@ function handleShowDetails(productCode) {
     editFromDetailsBtn.dataset.code = productCode;
     deleteFromDetailsBtn.dataset.code = productCode;
 
-    // Add fresh event listeners to modal buttons since content was replaced
-    document.getElementById('editFromDetailsBtn').addEventListener('click', () => {
-        handleEdit(productCode);
-    });
-    document.getElementById('deleteFromDetailsBtn').addEventListener('click', () => {
-        handleDelete(productCode);
-    });
+    // Remove previous event listeners to avoid duplicates
+    const editBtn = document.getElementById('editFromDetailsBtn');
+    const deleteBtn = document.getElementById('deleteFromDetailsBtn');
+
+    // Store the event handlers to remove them first
+    if (editBtn._handleEdit) {
+        editBtn.removeEventListener('click', editBtn._handleEdit);
+    }
+    if (deleteBtn._handleDelete) {
+        deleteBtn.removeEventListener('click', deleteBtn._handleDelete);
+    }
+
+    // Create new handlers and store them
+    editBtn._handleEdit = () => handleEdit(productCode);
+    deleteBtn._handleDelete = () => handleDelete(productCode);
+
+    // Add new event listeners
+    editBtn.addEventListener('click', editBtn._handleEdit);
+    deleteBtn.addEventListener('click', deleteBtn._handleDelete);
 
     // Show modal
     detailsModal.classList.remove('hidden');

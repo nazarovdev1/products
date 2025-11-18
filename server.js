@@ -5,7 +5,7 @@ const path = require("path");
 const multer = require("multer");
 
 const app = express();
-const PORT = 3000;
+const PORT = 3001;
 const PRODUCTS_FILE = path.join(__dirname, "data", "products.json");
 
 // Middleware
@@ -126,15 +126,19 @@ app.post(
         newProduct.image = `/images/${req.file.filename}`;
       }
 
-      // Validate required fields
+      // Validate required fields (making code optional)
       if (!newProduct.title || !newProduct.price) {
         return res
           .status(400)
           .json({ error: "Missing required fields (title, price)" });
       }
 
-      // Check if code already exists (only if code is provided)
-      if (newProduct.code) {
+      // Generate code if not provided
+      if (!newProduct.code) {
+        // Generate a default unique code
+        newProduct.code = `PROD-${Date.now()}`;
+      } else {
+        // Check if code already exists (only if code is provided)
         const existingProduct = products.find(
           (p) => p.code === newProduct.code
         );
@@ -202,7 +206,7 @@ app.post(
   }
 );
 
-// PATCH product update by code
+// PATCH product update by code (for JSON requests from edit form)
 app.patch(
   "/api/products/:code",
   (req, res, next) => {
@@ -241,8 +245,13 @@ app.patch(
       const products = await readProducts();
       const productCode = req.params.code;
 
+      // Log for debugging
+      console.log("Attempting to update product with code:", productCode); // Debug log
+      console.log("Request body:", req.body); // Debug log
+
       const productIndex = products.findIndex((p) => p.code === productCode);
       if (productIndex === -1) {
+        console.log("Product not found for code:", productCode); // Debug log
         return res.status(404).json({ error: "Product not found" });
       }
 
@@ -254,13 +263,13 @@ app.patch(
       }
 
       // Convert string numbers if they exist
-      if (updatedProduct.price)
+      if (updatedProduct.price !== undefined && updatedProduct.price !== null)
         updatedProduct.price = parseInt(updatedProduct.price);
-      if (updatedProduct.purchase_price)
+      if (updatedProduct.purchase_price !== undefined && updatedProduct.purchase_price !== null)
         updatedProduct.purchase_price = parseInt(updatedProduct.purchase_price);
-      if (updatedProduct.stock)
+      if (updatedProduct.stock !== undefined && updatedProduct.stock !== null)
         updatedProduct.stock = parseInt(updatedProduct.stock);
-      if (updatedProduct.sold_price)
+      if (updatedProduct.sold_price !== undefined && updatedProduct.sold_price !== null)
         updatedProduct.sold_price = parseInt(updatedProduct.sold_price);
 
       // Parse size back to array if it's a string
@@ -297,6 +306,7 @@ app.patch(
       const success = await writeProducts(products);
 
       if (success) {
+        console.log("Product updated successfully"); // Debug log
         res.json({
           message: "Mahsulot muvaffaqiyatli yangilandi",
           product: products[productIndex],
@@ -305,12 +315,84 @@ app.patch(
         res.status(500).json({ error: "Mahsulot yangilanmadi" });
       }
     } catch (error) {
+      console.error("Error updating product:", error); // Debug log
       res
         .status(500)
         .json({ error: "Mahsulot yangilanishda xatolik yuz berdi" });
     }
   }
 );
+
+// Also create a PATCH endpoint for ID-based updates (for compatibility)
+app.patch("/api/products/id/:id", async (req, res) => {
+  try {
+    const products = await readProducts();
+    const productId = req.params.id;
+
+    const productIndex = products.findIndex((p) => p.id === productId);
+    if (productIndex === -1) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    const updatedProduct = req.body;
+
+    // Convert string numbers if they exist
+    if (updatedProduct.price !== undefined && updatedProduct.price !== null)
+      updatedProduct.price = parseInt(updatedProduct.price);
+    if (updatedProduct.purchase_price !== undefined && updatedProduct.purchase_price !== null)
+      updatedProduct.purchase_price = parseInt(updatedProduct.purchase_price);
+    if (updatedProduct.stock !== undefined && updatedProduct.stock !== null)
+      updatedProduct.stock = parseInt(updatedProduct.stock);
+    if (updatedProduct.sold_price !== undefined && updatedProduct.sold_price !== null)
+      updatedProduct.sold_price = parseInt(updatedProduct.sold_price);
+
+    // Parse size back to array if it's a string
+    if (updatedProduct.size !== undefined && updatedProduct.size !== null) {
+      if (typeof updatedProduct.size === "string") {
+        try {
+          // First try to parse as JSON array
+          updatedProduct.size = JSON.parse(updatedProduct.size);
+          // If it's not an array after parsing, handle as comma-separated string
+          if (!Array.isArray(updatedProduct.size)) {
+            updatedProduct.size = updatedProduct.size
+              .toString()
+              .split(",")
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0);
+          }
+        } catch (e) {
+          // If parsing fails, assume it's comma-separated string
+          updatedProduct.size = updatedProduct.size
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+        }
+      } else if (!Array.isArray(updatedProduct.size)) {
+        // If it's not a string and not an array, convert to array
+        updatedProduct.size = [updatedProduct.size];
+      }
+    }
+
+    // Update the product
+    products[productIndex] = { ...products[productIndex], ...updatedProduct };
+
+    // Save updated products to file
+    const success = await writeProducts(products);
+
+    if (success) {
+      res.json({
+        message: "Mahsulot muvaffaqiyatli yangilandi",
+        product: products[productIndex],
+      });
+    } else {
+      res.status(500).json({ error: "Mahsulot yangilanmadi" });
+    }
+  } catch (error) {
+    res
+      .status(500)
+      .json({ error: "Mahsulot yangilanishda xatolik yuz berdi" });
+  }
+});
 
 // DELETE product by id (legacy route)
 app.delete("/api/products/id/:id", async (req, res) => {
