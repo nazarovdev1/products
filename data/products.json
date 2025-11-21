@@ -1,22 +1,22 @@
 [
   {
-    "title": "dsa",
-    "code": "6818053",
-    "category": "ko'ylak",
+    "title": "asd",
+    "code": "PROD-1763714812249",
+    "category": "oyoq kiyim",
     "color": "oq, qizil",
     "size": [
       "S",
       "M",
       "L",
-      "23"
+      "XL"
     ],
-    "price": 123,
+    "price": 300,
     "purchase_price": 123,
-    "stock": 3,
-    "status": "yangi",
-    "sold_price": 0,
+    "stock": 2,
+    "status": "ostatka",
+    "sold_price": 3,
     "sold_date": "",
-    "creation_date": "2025-11-18",
-    "id": "1763439708213"
+    "creation_date": "2025-11-21",
+    "id": "1763714812249"
   }
 ]

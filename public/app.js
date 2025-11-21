@@ -11,7 +11,7 @@ let deletingProductId = null;
 
 // DOM Elements
 const searchInput = document.getElementById('searchInput');
-const categoryFilter = document.getElementById('categoryFilter');
+// const categoryFilter = document.getElementById('categoryFilter'); // Removed
 const productsContainer = document.getElementById('productsContainer');
 const noResults = document.getElementById('noResults');
 const addProductBtn = document.getElementById('addProductBtn');
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Setup Event Listeners
 function setupEventListeners() {
     searchInput.addEventListener('input', handleSearchAndFilter);
-    categoryFilter.addEventListener('change', handleSearchAndFilter);
+    // categoryFilter.addEventListener('change', handleSearchAndFilter); // Removed
     addProductBtn.addEventListener('click', openModal);
     soldProductBtn.addEventListener('click', openSoldModal);
     closeModalBtn.addEventListener('click', closeModal);
@@ -85,7 +85,7 @@ async function loadProducts() {
     try {
         const response = await fetch(API_URL);
         if (!response.ok) throw new Error('Failed to fetch products');
-        
+
         allProducts = await response.json();
         filteredProducts = [...allProducts];
         renderProducts(filteredProducts);
@@ -117,10 +117,9 @@ function renderProducts(products) {
                 ${product.image ? `<img src="${product.image}" alt="${product.title}" class="w-16 h-16 object-cover rounded">` : '<div class="w-16 h-16 bg-gray-200 rounded flex items-center justify-center"><i class="fas fa-image text-gray-400 text-xl"></i></div>'}
             </div>
             <div class="flex items-center justify-between text-sm text-gray-600">
-                <span class="flex items-center">
-                    <i class="fas fa-tag mr-1 text-blue-500"></i>
-                    ${product.category}
-                </span>
+                ${product.image ? `<img src="${product.image}" alt="${product.title}" class="w-16 h-16 object-cover rounded">` : '<div class="w-16 h-16 bg-gray-200 rounded flex items-center justify-center"><i class="fas fa-image text-gray-400 text-xl"></i></div>'}
+            </div>
+            <div class="flex items-center justify-between text-sm text-gray-600">
                 <span class="flex items-center">
                     <i class="fas fa-palette mr-1 text-purple-500"></i>
                     ${product.color}
@@ -151,19 +150,21 @@ function renderProducts(products) {
 // Handle Search and Filter
 function handleSearchAndFilter() {
     const query = searchInput.value.toLowerCase().trim();
-    const selectedCategory = categoryFilter.value;
+    // const selectedCategory = categoryFilter.value; // Removed
 
     filteredProducts = allProducts.filter(product => {
-        // Category filter
+        // Category filter removed
+        /*
         if (selectedCategory && product.category !== selectedCategory) {
             return false;
         }
+        */
 
         // Search filter
         if (query) {
             return (
                 product.title.toLowerCase().includes(query) ||
-                product.category.toLowerCase().includes(query) ||
+                // product.category.toLowerCase().includes(query) || // Removed
                 product.color.toLowerCase().includes(query) ||
                 product.code?.toLowerCase().includes(query) ||
                 product.status.toLowerCase().includes(query) ||
@@ -189,11 +190,11 @@ async function handleAddProduct(e) {
             // For edit, prepare JSON data
             const title = addProductForm.elements['title'].value;
             const code = addProductForm.elements['code'].value;
-            const category = addProductForm.elements['category'].value;
+            // const category = addProductForm.elements['category'].value; // Removed
             const status = addProductForm.elements['status'].value;
             const color = addProductForm.elements['color'].value;
             const price = addProductForm.elements['price'].value;
-            const purchase_price = addProductForm.elements['purchase_price'].value;
+            // const purchase_price = addProductForm.elements['purchase_price'].value; // Removed
             const stock = addProductForm.elements['stock'].value;
             const size = addProductForm.elements['size'].value;
             const sold_price = addProductForm.elements['sold_price'].value || 0;
@@ -203,14 +204,14 @@ async function handleAddProduct(e) {
 
             const productData = {
                 title: title,
-                category: category,
+                category: "", // Default empty or removed
                 price: parseInt(price),
                 code: code,  // Note: we don't want to change the code during editing, so this will be ignored by the server
                 status: status,
                 color: color,
                 stock: parseInt(stock),
                 size: sizeArray,
-                purchase_price: parseInt(purchase_price),
+                purchase_price: 0, // Default to 0 as field is removed
                 sold_price: parseInt(sold_price),
                 sold_date: sold_date
                 // image is handled by the server to preserve existing image if no new image is provided
@@ -347,11 +348,11 @@ async function handleEdit(productCode) {
     // Fill form with product data
     addProductForm.elements['title'].value = product.title || '';
     addProductForm.elements['code'].value = product.code || '';
-    addProductForm.elements['category'].value = product.category || '';
+    // addProductForm.elements['category'].value = product.category || ''; // Removed
     addProductForm.elements['color'].value = product.color || '';
     addProductForm.elements['size'].value = Array.isArray(product.size) ? product.size.join(', ') : product.size || '';
     addProductForm.elements['price'].value = product.price || '';
-    addProductForm.elements['purchase_price'].value = product.purchase_price || '';
+    // addProductForm.elements['purchase_price'].value = product.purchase_price || ''; // Removed
     addProductForm.elements['stock'].value = product.stock || '';
     addProductForm.elements['status'].value = product.status || 'yangi';
     addProductForm.elements['sold_price'].value = product.sold_price || '';
@@ -400,6 +401,11 @@ function handleShowDetails(productCode) {
                     </div>
                 </div>
 
+                    </div>
+                </div>
+
+                <!-- Category removed from details -->
+                <!--
                 <div class="flex items-center space-x-3">
                     <i class="fas fa-folder text-purple-600 w-5"></i>
                     <div>
@@ -407,6 +413,9 @@ function handleShowDetails(productCode) {
                         <p class="font-semibold">${product.category}</p>
                     </div>
                 </div>
+                -->
+
+                <div class="flex items-center space-x-3">
 
                 <div class="flex items-center space-x-3">
                     <i class="fas fa-palette text-indigo-600 w-5"></i>
@@ -636,7 +645,26 @@ async function handleSellProduct(e) {
             throw new Error('Mahsulot yangilanishda xatolik');
         }
 
-        showSuccess(`${quantitySold} dona mahsulot sotildi!`);
+        if (!response.ok) {
+            throw new Error('Mahsulot yangilanishda xatolik');
+        }
+
+        // Check if remaining stock is 0, if so delete the product
+        const remainingStock = product.stock - quantitySold;
+        if (remainingStock <= 0) {
+            const deleteResponse = await fetch(`${API_URL}/${selectedProductCode}`, {
+                method: 'DELETE'
+            });
+
+            if (deleteResponse.ok) {
+                showSuccess(`${quantitySold} dona sotildi va mahsulot tugagani uchun o'chirildi!`);
+            } else {
+                showSuccess(`${quantitySold} dona mahsulot sotildi! (Lekin o'chirishda xatolik)`);
+            }
+        } else {
+            showSuccess(`${quantitySold} dona mahsulot sotildi!`);
+        }
+
         closeSoldModal();
         await loadProducts();
     } catch (error) {
